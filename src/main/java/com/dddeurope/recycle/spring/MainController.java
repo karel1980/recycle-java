@@ -1,9 +1,11 @@
 package com.dddeurope.recycle.spring;
 
 import com.dddeurope.recycle.commands.CommandMessage;
+import com.dddeurope.recycle.events.Event;
 import com.dddeurope.recycle.events.EventMessage;
 import com.dddeurope.recycle.events.FractionWasDropped;
 import com.dddeurope.recycle.events.PriceWasCalculated;
+import com.dddeurope.recycle.projections.PriceProjection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -12,18 +14,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
 public class MainController {
 
-    private Map<String, Double> pricePerKgFractionType = Map.of(
-        "Construction waste", 0.15,
-        "Green waste", 0.09
-    );
     private static final Logger LOGGER = LoggerFactory.getLogger(MainController.class);
 
     @GetMapping("/validate")
@@ -35,24 +31,25 @@ public class MainController {
     public ResponseEntity<EventMessage> handle(@RequestBody RecycleRequest request) {
         LOGGER.info("Incoming Request: {}", request.asString());
 
-        List<FractionWasDropped> drops = request.history().stream()
-            .map(EventMessage::getPayload)
-            .filter(FractionWasDropped.class::isInstance)
-            .map(FractionWasDropped.class::cast)
-            .toList();
+        List<FractionWasDropped> drops = request.getEventsOfType(FractionWasDropped.class);
 
-        Double amount = drops.stream()
-            .mapToDouble(d -> pricePerKgFractionType.get(d.fractionType()) * d.weight())
-            .sum();
+        PriceProjection priceProjection = new PriceProjection();
+        drops.forEach(priceProjection::project);
 
-        double rounded = Math.round(amount * 100) / 100.0;
-
-        var message = new EventMessage("todo", new PriceWasCalculated("123", rounded, "EUR"));
+        var message = new EventMessage("todo", new PriceWasCalculated("123", priceProjection.getPrice(), "EUR"));
 
         return ResponseEntity.ok(message);
     }
 
     public record RecycleRequest(List<EventMessage> history, CommandMessage command) {
+
+        public <T extends Event> List<T> getEventsOfType(Class<T> type) {
+            return this.history().stream()
+                .map(EventMessage::getPayload)
+                .filter(m -> type.isAssignableFrom(m.getClass()))
+                .map(type::cast)
+                .toList();
+        }
 
         public String asString() {
             var historyAsString = history.stream()
