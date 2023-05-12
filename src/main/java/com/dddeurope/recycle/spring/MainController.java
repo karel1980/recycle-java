@@ -45,7 +45,9 @@ public class MainController {
             .mapToDouble(d -> pricePerKgFractionType.get(d.fractionType()) * d.weight())
             .sum();
 
-        var message = new EventMessage("todo", new PriceWasCalculated("123", amount, "EUR"));
+        double rounded = Math.round(amount * 100) / 100.0;
+
+        var message = new EventMessage("todo", new PriceWasCalculated("123", rounded, "EUR"));
 
         return ResponseEntity.ok(message);
     }
