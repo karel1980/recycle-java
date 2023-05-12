@@ -4,7 +4,9 @@ import com.dddeurope.recycle.commands.CommandMessage;
 import com.dddeurope.recycle.events.Event;
 import com.dddeurope.recycle.events.EventMessage;
 import com.dddeurope.recycle.events.FractionWasDropped;
+import com.dddeurope.recycle.events.IdCardRegistered;
 import com.dddeurope.recycle.events.PriceWasCalculated;
+import com.dddeurope.recycle.projections.IdCardRegistrationProjection;
 import com.dddeurope.recycle.projections.PriceProjection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,9 +33,12 @@ public class MainController {
     public ResponseEntity<EventMessage> handle(@RequestBody RecycleRequest request) {
         LOGGER.info("Incoming Request: {}", request.asString());
 
-        List<FractionWasDropped> drops = request.getEventsOfType(FractionWasDropped.class);
+        IdCardRegistrationProjection idCardRegistrationProjection = new IdCardRegistrationProjection();
+        List<IdCardRegistered> registrations = request.getEventsOfType(IdCardRegistered.class);
+        registrations.forEach(idCardRegistrationProjection::project);
 
-        PriceProjection priceProjection = new PriceProjection();
+        PriceProjection priceProjection = new PriceProjection(idCardRegistrationProjection);
+        List<FractionWasDropped> drops = request.getEventsOfType(FractionWasDropped.class);
         drops.forEach(priceProjection::project);
 
         var message = new EventMessage("todo", new PriceWasCalculated("123", priceProjection.getPrice(), "EUR"));
