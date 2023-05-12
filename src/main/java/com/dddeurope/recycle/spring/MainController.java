@@ -1,15 +1,14 @@
 package com.dddeurope.recycle.spring;
 
-import com.dddeurope.recycle.aggregates.Visit;
-import com.dddeurope.recycle.aggregates.Visits;
+import com.dddeurope.recycle.aggregates.Customers;
+import com.dddeurope.recycle.commands.CalculatePrice;
 import com.dddeurope.recycle.commands.CommandMessage;
 import com.dddeurope.recycle.events.Event;
 import com.dddeurope.recycle.events.EventMessage;
 import com.dddeurope.recycle.events.FractionWasDropped;
 import com.dddeurope.recycle.events.IdCardRegistered;
 import com.dddeurope.recycle.events.PriceWasCalculated;
-import com.dddeurope.recycle.projections.IdCardRegistrationProjection;
-import com.dddeurope.recycle.projections.PriceProjection;
+import com.dddeurope.recycle.model.CardId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -40,16 +39,12 @@ public class MainController {
     }
 
     EventMessage handleRequest(RecycleRequest request) {
-        IdCardRegistrationProjection idCardRegistrationProjection = new IdCardRegistrationProjection();
-        List<IdCardRegistered> registrations = request.getEventsOfType(IdCardRegistered.class);
-        registrations.forEach(idCardRegistrationProjection::project);
+        Customers customers = new Customers();
+        request.history.stream().map(EventMessage::getPayload).forEach(customers::handle);
 
-        PriceProjection priceProjection = new PriceProjection(idCardRegistrationProjection);
-        List<FractionWasDropped> drops = request.getEventsOfType(FractionWasDropped.class);
-        drops.forEach(priceProjection::project);
-
-        String cardId = registrations.get(0).cardId();
-        return new EventMessage("todo", new PriceWasCalculated(cardId, priceProjection.getPrice(), "EUR"));
+        CardId cardId = new CardId(((CalculatePrice) (request.command().getPayload())).cardId());
+        double price = customers.getCustomer(cardId).calculatePriceOfMostRecentVisit();
+        return new EventMessage("todo", new PriceWasCalculated(cardId.value(), price, "EUR"));
     }
 
     public record RecycleRequest(List<EventMessage> history, CommandMessage command) {
