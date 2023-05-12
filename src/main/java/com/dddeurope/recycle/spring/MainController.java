@@ -1,5 +1,7 @@
 package com.dddeurope.recycle.spring;
 
+import com.dddeurope.recycle.aggregates.Visit;
+import com.dddeurope.recycle.aggregates.Visits;
 import com.dddeurope.recycle.commands.CommandMessage;
 import com.dddeurope.recycle.events.Event;
 import com.dddeurope.recycle.events.EventMessage;
@@ -33,6 +35,11 @@ public class MainController {
     public ResponseEntity<EventMessage> handle(@RequestBody RecycleRequest request) {
         LOGGER.info("Incoming Request: {}", request.asString());
 
+        EventMessage message = handleRequest(request);
+        return ResponseEntity.ok(message);
+    }
+
+    EventMessage handleRequest(RecycleRequest request) {
         IdCardRegistrationProjection idCardRegistrationProjection = new IdCardRegistrationProjection();
         List<IdCardRegistered> registrations = request.getEventsOfType(IdCardRegistered.class);
         registrations.forEach(idCardRegistrationProjection::project);
@@ -41,9 +48,8 @@ public class MainController {
         List<FractionWasDropped> drops = request.getEventsOfType(FractionWasDropped.class);
         drops.forEach(priceProjection::project);
 
-        var message = new EventMessage("todo", new PriceWasCalculated("123", priceProjection.getPrice(), "EUR"));
-
-        return ResponseEntity.ok(message);
+        String cardId = registrations.get(0).cardId();
+        return new EventMessage("todo", new PriceWasCalculated(cardId, priceProjection.getPrice(), "EUR"));
     }
 
     public record RecycleRequest(List<EventMessage> history, CommandMessage command) {
